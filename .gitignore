@@ -1,0 +1,6 @@
+__pycache__
+.idea
+data/test*
+data/sample*
+data/macro*
+data/train.csv/_*
