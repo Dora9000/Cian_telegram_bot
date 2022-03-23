@@ -75,13 +75,14 @@ def h_search(update: Update, context: CallbackContext) -> None:
     if not is_authorized(context):
         context.bot.send_message(chat_id=update.effective_chat.id, text="Type /start to start")
         return
-    number, min_val, max_val, avg_val = dl_get_room_properties(context)
-    if number == 0:
+    statistic_values = dl_get_room_properties(context)
+    if statistic_values['count'] == 0:
         dl_clear_user(context, filter_mode=True)
         context.bot.send_message(chat_id=update.effective_chat.id, text='Sorry, no rooms found. '
                                                                         'Create new filter to search.')
         return
-    text = f'We have {number} rooms with range\n{min_val} $ - {max_val}$\naverage is {avg_val}$ \n'
+    text = f"We have {statistic_values['count']} rooms with range\n{statistic_values['min']} $ - " \
+           f"{statistic_values['max']}$\naverage is {statistic_values['avg']}$ \n"
     params_to_ask = []
     for param in dl_params(context):
         if context.user_data.get(param) is not None:
@@ -90,9 +91,9 @@ def h_search(update: Update, context: CallbackContext) -> None:
             params_to_ask.append(param)
     context.bot.send_message(chat_id=update.effective_chat.id, text=text)
     keyboard = []
-    if number <= SHOW_LIMIT:
+    if statistic_values['count'] <= SHOW_LIMIT:
         keyboard.append([InlineKeyboardButton("See result", callback_data='show')])
-    if len(params_to_ask) > 0 and number > 1:
+    if len(params_to_ask) > 0 and statistic_values['count'] > 1:
         keyboard.append([InlineKeyboardButton("Add filter", callback_data='search')])
     if len(keyboard) == 0:  # return the cut result list
         keyboard.append([InlineKeyboardButton("See result", callback_data='show')])
@@ -105,20 +106,20 @@ def h_show(update: Update, context: CallbackContext) -> None:
     if not is_authorized(context):
         context.bot.send_message(chat_id=update.effective_chat.id, text="Type /start to start")
         return
-    number = dl_get_room_properties(context)[0]
-    if number <= 0:
+    count = dl_get_room_properties(context)['count']
+    if count <= 0:
         dl_clear_user(context, filter_mode=True)
         context.bot.send_message(chat_id=update.effective_chat.id, text='Sorry, no rooms found. '
                                                                         'Create new filter to search.')
         return
-    if number <= SHOW_LIMIT:
+    if count <= SHOW_LIMIT:
         state(None, context)
         text = dl_get_room(context)
         dl_clear_user(context, filter_mode=True)
-    elif number <= PREDICT_LIMIT:
-        text = f'We have too many ({number}) apartments to show. If you want to predict the price, type /predict.'
+    elif count <= PREDICT_LIMIT:
+        text = f'We have too many ({count}) apartments to show. If you want to predict the price, type /predict.'
     else:
-        text = f'We have {number} apartments to show. Enter some more filters to find the best apartment!'
+        text = f'We have {count} apartments to show. Enter some more filters to find the best apartment!'
     context.bot.send_message(chat_id=update.effective_chat.id, text=text)
 
 
@@ -127,8 +128,8 @@ def h_predict(update: Update, context: CallbackContext) -> None:
     if not is_authorized(context):
         context.bot.send_message(chat_id=update.effective_chat.id, text="Type /start to start")
         return
-    number = dl_get_room_properties(context)[0]
-    if number <= 1:
+    count = dl_get_room_properties(context)['count']
+    if count <= 1:
         h_show(update, context)
         return
 

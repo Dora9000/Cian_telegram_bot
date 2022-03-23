@@ -65,15 +65,21 @@ def dl_params(context=None):
     return data
 
 
-def dl_get_room(context):
-    data = read_csv(DATA_FILE, nrows=ROW_LIMIT, dtype=str)
-    filter_l = []
-    for param in dl_params(context):
+def filter_dataframe(data, params, context):
+    # fix all known params and get prices to make graph
+    params_list = []
+    for param in params:
         if param in LOCAL: continue
         if param[-len(HASH_KEY):] == HASH_KEY: continue
         if context.user_data.get(param) is not None:
-            filter_l.append(param)
+            params_list.append(param)
             data = data.loc[data[param] == context.user_data.get(param)]
+    return data, params_list
+
+
+def dl_get_room(context):
+    data = read_csv(DATA_FILE, nrows=ROW_LIMIT, dtype=str)
+    data, filter_l = filter_dataframe(data, dl_params(context), context)
     for col in filter_l:
         data = data.drop(columns=col)
     for col in data.columns:
@@ -86,17 +92,15 @@ def dl_get_room(context):
 
 def dl_get_room_properties(context):
     data = read_csv(DATA_FILE, nrows=ROW_LIMIT, dtype=str)
-    for param in dl_params(context):
-        if param in LOCAL: continue
-        if param[-len(HASH_KEY):] == HASH_KEY: continue
-        if context.user_data.get(param) is not None:
-            data = data.loc[data[param] == context.user_data.get(param)]
-    number = len(data)
+    answer = {"count": 0, "min": -1, "max": -1, "avg": -1}
+    data = filter_dataframe(data, dl_params(context), context)[0]
+    answer['count'] = len(data)
     data = data[TARGET_COLUMN].apply(float)
-    if number == 0:
-        return 0, -1, -1, -1
-    min_val, max_val, avg_val = min(data), max(data), sum(data) / number
-    return number, min_val, max_val, avg_val
+    if answer['count'] == 0:
+        return answer
+    answer['min'], answer['max'] = min(data), max(data)
+    answer['avg'] = sum(data) / answer['count']
+    return answer
 
 
 def dl_safe_data(context):
@@ -116,19 +120,14 @@ def dl_predict(context) -> str:
     return f'Predicted value = {round(x, 2)}$'
 
 
-def dl_graph(context, p) -> str:
+def dl_graph(context, x_axis) -> str:
     data = read_csv(DATA_FILE, nrows=ROW_LIMIT, dtype=str)
-    if context.user_data.get(p) is None:
-        # fix all known params and get prices to make graph
-        for param in dl_params(context):
-            if param in LOCAL: continue
-            if param[-len(HASH_KEY):] == HASH_KEY: continue
-            if context.user_data.get(param) is not None:
-                data = data.loc[data[param] == context.user_data.get(param)]
+    if context.user_data.get(x_axis) is None:
+        data = filter_dataframe(data, dl_params(context), context)[0]
 
     # make graph
     y = data[TARGET_COLUMN].apply(lambda x: int(x))
-    x = data[p]
+    x = data[x_axis]
     try:
         x = to_numeric(x)
         x = x.replace(np.nan, 0)
@@ -141,7 +140,7 @@ def dl_graph(context, p) -> str:
         pass
 
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4))
-    ax.set_xlabel(p)
+    ax.set_xlabel(x_axis)
     ax.set_ylabel('price')
     ax.plot(x, y)
 
@@ -150,14 +149,14 @@ def dl_graph(context, p) -> str:
         plt.xticks(range(min(x), max(x), (max(x) - min(x)) // 10), size=7)
     except Exception:
         try:
-            N = len(plt.xticks()[0])
-            ax.set_xticks(np.arange(0, N, N // 10))
+            x_axis_len = len(plt.xticks()[0])
+            ax.set_xticks(np.arange(0, x_axis_len, x_axis_len // 10))
             plt.xticks(size=7)
             fig.autofmt_xdate(rotation=45)
         except Exception:
             pass
 
-    ax.set_title(f'Price dependence of {p}')
+    ax.set_title(f'Price dependence of {x_axis}')
     fig.savefig(GRAPH_FILE)
     plt.close(fig)
     return GRAPH_FILE
